@@ -3,7 +3,7 @@ from tkinter import filedialog, messagebox
 from tkinter import ttk
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
-from scanner import check_vulnerability, network_scan, save_results, os_detection, scan_device
+from scanner import network_scan, save_results, scan_device
 from visualization import visualize_network
 import schedule
 import time
@@ -13,7 +13,7 @@ class PortScannerApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Port Scanner")
-        self.geometry("800x500")
+        self.geometry("1000x600")
 
         # Frame for IP Range and Scan Type
         self.input_frame = tk.Frame(self)
