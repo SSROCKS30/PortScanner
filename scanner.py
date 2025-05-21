@@ -1,20 +1,42 @@
 import nmap
 import logging
 import json
+import os # Added for path joining
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# Function to get Nmap path from config or use default
+def get_nmap_path():
+    config_file = 'config.json'
+    default_nmap_path = None # Will mean system PATH
+    try:
+        if os.path.exists(config_file):
+            with open(config_file, 'r') as f:
+                config = json.load(f)
+                nmap_path_from_config = config.get('nmap_path')
+                if nmap_path_from_config and nmap_path_from_config != "PASTE_YOUR_NMAP_PATH_HERE_IF_NOT_IN_SYSTEM_PATH":
+                    logging.info(f"Using Nmap path from {config_file}: {nmap_path_from_config}")
+                    return nmap_path_from_config
+                else:
+                    logging.info(f"'{config_file}' found, but 'nmap_path' is not set or is placeholder. Trying system PATH.")
+        else:
+            logging.info(f"'{config_file}' not found. Trying system PATH for Nmap.")
+    except Exception as e:
+        logging.warning(f"Error reading {config_file}: {e}. Trying system PATH for Nmap.")
+    return default_nmap_path
+
 def network_scan(ip_range):
     logging.info(f"Discovering devices in network range: {ip_range}")
+    nmap_path = get_nmap_path()
     try:
-        scanner = nmap.PortScanner(nmap_search_path=('nmap', 'C:\\\\Program Files (x86)\\\\Nmap\\\\nmap.exe'))
-    except nmap.PortScannerError:
-        logging.debug("Nmap direct path failed, trying default PATH search for host discovery.")
-        try:
-            scanner = nmap.PortScanner()
-        except nmap.PortScannerError as e:
-            logging.error(f"Nmap program was not found in path for host discovery. Error: {e}")
-            return []
+        if nmap_path:
+            scanner = nmap.PortScanner(nmap_search_path=(nmap_path,))
+        else:
+            scanner = nmap.PortScanner() # Try system PATH
+    except nmap.PortScannerError as e:
+        logging.error(f"Nmap program was not found in configured path or system PATH. Error: {e}")
+        logging.error("Please ensure Nmap is installed and its path is correctly specified in 'config.json' or available in the system PATH.")
+        return []
     try:
         # -sn: Ping Scan - disables port scanning. Just discovers hosts.
         scanner.scan(ip_range, arguments='-sn')
@@ -56,15 +78,16 @@ def check_vulnerability(ip, port, service_name=None, product_name=None):
 # Updated perform_scan to accept perform_os_detection
 def perform_scan(ip, scan_type='Default', perform_os_detection=False):
     logging.info(f"Performing {scan_type} scan on {ip} (OS Detection: {'Enabled' if perform_os_detection else 'Disabled'})")
+    nmap_path = get_nmap_path()
     try:
-        scanner = nmap.PortScanner(nmap_search_path=('nmap', 'C:\\\\Program Files (x86)\\\\Nmap\\\\nmap.exe'))
-    except nmap.PortScannerError:
-        logging.debug("Nmap direct path failed, trying default PATH search for port scan.")
-        try:
-            scanner = nmap.PortScanner()
-        except nmap.PortScannerError as e:
-            logging.error(f"Nmap program was not found in path for port scan. Error: {e}")
-            return None
+        if nmap_path:
+            scanner = nmap.PortScanner(nmap_search_path=(nmap_path,))
+        else:
+            scanner = nmap.PortScanner() # Try system PATH
+    except nmap.PortScannerError as e:
+        logging.error(f"Nmap program was not found in configured path or system PATH. Error: {e}")
+        logging.error("Please ensure Nmap is installed and its path is correctly specified in 'config.json' or available in the system PATH.")
+        return None
 
     arguments = ''
     if scan_type == 'SYN Scan':

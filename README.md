@@ -43,7 +43,16 @@ This project is a Python-based network scanning tool with a graphical user inter
     python -m venv myenv
     source myenv/bin/activate  # On Windows: myenv\Scripts\activate
     ```
-3.  **Install the required Python libraries:**
+3.  **Configure Nmap Path (Important):**
+    -   Copy `config.example.json` to `config.json`.
+    -   Edit `config.json` and update the `"nmap_path"` value to the full path of your `nmap.exe` if it's not already in your system's PATH or if you want to specify a particular Nmap installation. For example:
+        ```json
+        {
+          "nmap_path": "C:\\Program Files (x86)\\Nmap\\nmap.exe"
+        }
+        ```
+    -   If Nmap is in your system PATH and you don't need to specify it, you can leave the default placeholder value or an empty string, and the application will attempt to use the system PATH.
+4.  **Install the required Python libraries:**
     ```bash
     pip install -r requirements.txt
     ```
@@ -111,10 +120,11 @@ PortScanner/
 
 ## Important Note on Nmap
 -   **Nmap Installation**: This tool relies on Nmap being installed on your system.
--   **Nmap Path**:
-    -   The application first tries to locate Nmap at a hardcoded path (`C:\Program Files (x86)\Nmap\nmap.exe`).
-    -   If not found there, it attempts to find Nmap in your system's PATH.
-    -   **It is highly recommended to ensure Nmap is in your system's PATH for reliable operation.**
+-   **Nmap Path Configuration**:
+    -   The application will first attempt to read the Nmap executable path from a `config.json` file in the root directory.
+    -   To specify a path, copy `config.example.json` to `config.json` and edit the `nmap_path` value.
+    -   If `config.json` is not found, or if the `nmap_path` in it is not set or invalid, the application will attempt to find Nmap in your system's PATH.
+    -   **It is highly recommended to either ensure Nmap is in your system's PATH or to correctly configure its path in `config.json` for reliable operation.**
 -   **Permissions**: Some Nmap scan types (like SYN scans and OS detection) require raw packet privileges. You may need to run the application with administrator or root privileges for these scans to work correctly. If not, Nmap might fall back to other scan types or fail.
 
 ## Future Enhancements
