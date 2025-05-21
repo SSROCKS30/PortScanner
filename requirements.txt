@@ -1,6 +1,6 @@
-nmap
+python-nmap
 networkx
 matplotlib
-tkinter
 schedule
 requests
+pyvis

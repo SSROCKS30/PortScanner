@@ -2,127 +2,174 @@ import nmap
 import logging
 import json
 import requests
-import subprocess
-import re
+# subprocess and re might not be needed if os_detection is fully removed or simplified
+# import subprocess
+# import re
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def network_scan(ip_range):
-    logging.info(f"Scanning network range: {ip_range}")
-    scanner = nmap.PortScanner()
+    logging.info(f"Discovering devices in network range: {ip_range}")
     try:
-        scanner.scan(ip_range, arguments='-sn')  # Changed from -sP to -sn for newer nmap versions
+        scanner = nmap.PortScanner(nmap_search_path=('nmap', 'C:\\\\Program Files (x86)\\\\Nmap\\\\nmap.exe'))
+    except nmap.PortScannerError:
+        logging.debug("Nmap direct path failed, trying default PATH search for host discovery.")
+        try:
+            scanner = nmap.PortScanner()
+        except nmap.PortScannerError as e:
+            logging.error(f"Nmap program was not found in path for host discovery. Error: {e}")
+            return []
+    try:
+        # -sn: Ping Scan - disables port scanning. Just discovers hosts.
+        scanner.scan(ip_range, arguments='-sn')
     except nmap.PortScannerError as e:
-        logging.error(f"Network scan failed: {e}")
+        logging.error(f"Network host discovery scan failed: {e}")
         return []
     
     devices = []
-
     for host in scanner.all_hosts():
         devices.append({
             'ip': host,
-            'hostname': scanner[host].hostname(),
-            'status': scanner[host].state()
+            # We are removing hostname and status from GUI, but nmap -sn provides them.
+            # Let's keep them internally for now, they might be useful for other features or logging.
+            'hostname': scanner[host].hostname() if scanner[host].hostname() else 'N/A',
+            'status': scanner[host].state() # e.g. 'up', 'down'
         })
-
+    logging.info(f"Found {len(devices)} live host(s) in range {ip_range}.")
     return devices
 
-def check_vulnerability(ip, port):
+def check_vulnerability(ip, port, service_name=None, product_name=None):
+    # Vulnerability check is simplified, consider enhancing it in the future.
+    # For now, it's kept as a placeholder.
+    # A more advanced approach would involve CVE databases and matching service/product versions.
     known_vulnerabilities = {
-        80: "https://nvd.nist.gov/vuln/detail/CVE-2021-44228",  # Example: Log4j vulnerability
-        22: "https://nvd.nist.gov/vuln/detail/CVE-2020-14145",  # Example: OpenSSH vulnerability
+        # Example: (port, service_keyword, vulnerability_info_url)
+        (80, "apache", "CVE-XXXX-XXXX: Apache Example Vulnerability"),
+        (22, "openssh", "CVE-YYYY-YYYY: OpenSSH Example Vulnerability"),
     }
-    
-    if port in known_vulnerabilities:
-        try:
-            response = requests.get(known_vulnerabilities[port], timeout=5)
-            if response.status_code == 200:
-                return f"Potential vulnerability: {known_vulnerabilities[port]}"
-        except requests.RequestException:
-            pass
-    return "No known vulnerabilities"
+    if product_name: # Product name is more specific
+        for (p, key, vuln) in known_vulnerabilities:
+            if port == p and key.lower() in product_name.lower():
+                return vuln
+    if service_name: # Fallback to service name
+        for (p, key, vuln) in known_vulnerabilities:
+            if port == p and key.lower() in service_name.lower():
+                return vuln
+    return "No known vulnerabilities (basic check)"
 
-def perform_scan(ip, scan_type='default'):
-    logging.info(f"Performing {scan_type} scan on {ip}")
-    scanner = nmap.PortScanner()
+# Updated perform_scan to accept perform_os_detection
+def perform_scan(ip, scan_type='Default', perform_os_detection=False):
+    logging.info(f"Performing {scan_type} scan on {ip} (OS Detection: {'Enabled' if perform_os_detection else 'Disabled'})")
     try:
-        if scan_type == 'SYN':
-            scanner.scan(ip, arguments='-sS -O')
-        elif scan_type == 'UDP':
-            scanner.scan(ip, arguments='-sU -O -sV')
-        elif scan_type == 'Version':
-            scanner.scan(ip, arguments='-sV -O')
-        elif scan_type == 'Comprehensive':
-            scanner.scan(ip, arguments='-sS -sU -sV -O -A')
-        else:
-            scanner.scan(ip, arguments='-sV -O')
-        
-        logging.debug(f"Full Nmap scan result for {ip}: {scanner[ip]}")
-        
-        result = {
-            'ip': ip,
-            'hostname': scanner[ip].hostname(),
-            'state': scanner[ip].state(),
-            'os': get_os_info(scanner[ip]),
-            'open_ports': get_open_ports(scanner[ip])
-        }
-        return result
+        scanner = nmap.PortScanner(nmap_search_path=('nmap', 'C:\\\\Program Files (x86)\\\\Nmap\\\\nmap.exe'))
+    except nmap.PortScannerError:
+        logging.debug("Nmap direct path failed, trying default PATH search for port scan.")
+        try:
+            scanner = nmap.PortScanner()
+        except nmap.PortScannerError as e:
+            logging.error(f"Nmap program was not found in path for port scan. Error: {e}")
+            return None
+
+    arguments = ''
+    if scan_type == 'SYN Scan':
+        arguments = '-sS' # Basic SYN scan for TCP ports
+    elif scan_type == 'UDP Scan':
+        arguments = '-sU -sV' # UDP Scan with Version Detection (recommended for UDP)
+    else:
+        # This case should ideally not be reached if GUI is the only source of scan_type
+        logging.error(f"Unknown or unsupported scan type received: {scan_type}. Aborting scan for this target.")
+        return {'ip': ip, 'state': 'error', 'open_ports': [], 'os': 'Invalid Scan Type', 'os_detection_performed': perform_os_detection}
+
+    if perform_os_detection:
+        arguments += ' -O'
+    
+    logging.debug(f"Nmap arguments for {ip}: {arguments}")
+
+    try:
+        scanner.scan(ip, arguments=arguments)
     except Exception as e:
-        logging.error(f"Scan failed for {ip}: {e}")
-        return None
+        logging.error(f"Nmap scan command failed for {ip} with args '{arguments}': {e}")
+        # If scan itself fails, return minimal info
+        return {'ip': ip, 'state': 'down or error', 'open_ports': [], 'os': 'Scan Error', 'os_detection_performed': perform_os_detection}
 
-def get_os_info(host_info):
-    if 'osmatch' in host_info:
-        os_matches = host_info['osmatch']
-        if os_matches:
-            top_match = os_matches[0]
-            return f"{top_match['name']} (Accuracy: {top_match['accuracy']}%)"
-    return "Unknown"
+    if ip not in scanner.all_hosts():
+        logging.warning(f"Host {ip} not found in Nmap scan results after scan command. Might be down or filtered.")
+        return {'ip': ip, 'state': 'down or filtered', 'open_ports': [], 'os': 'Host Not Found Post-Scan', 'os_detection_performed': perform_os_detection}
 
-def get_open_ports(host_info):
-    open_ports = []
-    for proto in host_info.all_protocols():
+    host_info = scanner[ip]
+    os_guess = "OS Detection Disabled" # Default if not performed
+    if perform_os_detection:
+        os_guess = get_os_info(host_info) # Get OS info if detection was performed
+        if not os_guess or os_guess == "Unknown": # If detection ran but failed
+            os_guess = "OS detection attempted, no match."
+
+    result = {
+        'ip': ip,
+        'state': host_info.state(), # Simplified: port state, not device status here
+        'os': os_guess,
+        'os_detection_performed': perform_os_detection, # Flag to help GUI
+        'open_ports': []
+    }
+
+    for proto in host_info.all_protocols(): # e.g., 'tcp', 'udp'
         ports = host_info[proto].keys()
         for port in ports:
-            service = host_info[proto][port]
-            open_ports.append({
+            service_info = host_info[proto][port]
+            port_data = {
                 'port': port,
                 'protocol': proto,
-                'state': service['state'],
-                'name': service.get('name', 'N/A'),
-                'product': service.get('product', 'N/A')
-            })
-    return open_ports
+                'state': service_info.get('state', 'N/A'),
+                # For vulnerability check, we need service name and product, 
+                # even if not displayed directly in main table
+                'name': service_info.get('name', ''), 
+                'product': service_info.get('product', ''),
+                'version': service_info.get('version', '')
+            }
+            result['open_ports'].append(port_data)
+    return result
 
-def os_detection(ip):
-    try:
-        result = subprocess.run(['nmap', '-O', ip], capture_output=True, text=True)
-        output = result.stdout
-        logging.debug(f"Raw nmap output: {output}")
-        
-        pattern = r"OS details: (.+)"  # Adjust as per your nmap output format
-        
-        match = re.search(pattern, output, re.IGNORECASE)
-        
-        if match:
-            os_details = match.group(1).strip()
-            return os_details
-        else:
-            logging.warning("No OS details found in nmap output.")
-            return "Unknown"
-        
-    except Exception as e:
-        logging.error(f"Error running nmap: {e}")
-        return "Unknown"
+def get_os_info(host_info):
+    if 'osmatch' in host_info and host_info['osmatch']:
+        top_match = host_info['osmatch'][0]
+        return f"{top_match.get('name', 'Unknown OS')} (Acc: {top_match.get('accuracy', 'N/A')}%)"
+    return "Unknown" # OS detection ran, but no match found
+
+# No longer using the separate os_detection function that used subprocess
+# def os_detection(ip): ... 
 
 def save_results(devices, filename):
     with open(filename, 'w') as file:
         json.dump(devices, file, indent=4)
 
-def scan_device(device, scan_type='default'):
-    scanned_info = perform_scan(device['ip'], scan_type)
-    if scanned_info:
-        for port in scanned_info['open_ports']:
-            port['vulnerability'] = check_vulnerability(device['ip'], port['port'])
-        device.update(scanned_info)
-    return device
+def scan_device(device_discovery_info, scan_type='Default', perform_os_detection=False):
+    ip = device_discovery_info['ip']
+    scanned_info = perform_scan(ip, scan_type, perform_os_detection)
+
+    # Create a new dictionary to ensure all data is present for visualization and saving
+    # Start with initial discovery info (IP, hostname, initial status)
+    # Then update/override with more detailed info from the port scan
+    combined_info = device_discovery_info.copy() # ip, hostname, status (from network_scan)
+
+    if scanned_info: # If perform_scan was successful and returned data
+        combined_info.update(scanned_info) # os, os_detection_performed, open_ports, state (nmap host state)
+        # Note: scanned_info['state'] (from nmap host status) might be more current than initial device_discovery_info['status']
+        
+        if 'open_ports' in combined_info: # Ensure open_ports exists
+            for port_detail in combined_info['open_ports']:
+                port_detail['vulnerability'] = check_vulnerability(
+                    combined_info['ip'], 
+                    port_detail['port'],
+                    service_name=port_detail.get('name'),
+                    product_name=port_detail.get('product')
+                )
+        else:
+            combined_info['open_ports'] = [] # Ensure it always has open_ports key
+    else: # perform_scan failed or returned None
+        logging.error(f"Scan details for {ip} are missing. Visualization might be incomplete for this host.")
+        # Ensure basic structure for GUI if scan totally failed after discovery
+        combined_info['os'] = combined_info.get('os', 'Scan Failed')
+        combined_info['os_detection_performed'] = perform_os_detection
+        combined_info['open_ports'] = []
+        combined_info['state'] = combined_info.get('state', 'unknown') # Use initial state if available
+
+    return combined_info
