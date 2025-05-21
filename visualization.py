@@ -8,7 +8,6 @@ import logging # Add logging import if not already there
 def visualize_network(devices, interactive=False):
     G = nx.Graph()
     host_nodes = []
-    port_nodes_data = {} # Store data for port nodes to style them later
 
     for device in devices:
         host_ip = device['ip']
@@ -32,7 +31,6 @@ def visualize_network(devices, interactive=False):
                        port_state=port_data.get('state', 'unknown'),
                        node_type='port' # Add a type attribute
                       )
-            port_nodes_data[port_id] = {'state': port_data.get('state', 'unknown')}
 
             # Edge from host to its port
             G.add_edge(host_ip, port_id,

@@ -1,10 +1,6 @@
 import nmap
 import logging
 import json
-import requests
-# subprocess and re might not be needed if os_detection is fully removed or simplified
-# import subprocess
-# import re
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
