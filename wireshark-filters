@@ -1,3 +1,8 @@
-ip.addr == <scanned ip> && ip.addr == <your ip> && tcp && (tcp.flags.syn == 1 || tcp.flags.reset == 1)
+tcp && ip.addr == 192.168.1.26 && ip.addr == 192.168.1.51 && tcp.port == 443 && (
+  (ip.src == 192.168.1.26 && tcp.flags.syn == 1 && tcp.flags.ack == 0) ||
+  (ip.src == 192.168.1.51 && tcp.flags.syn == 1 && tcp.flags.ack == 1) ||
+  (ip.src == 192.168.1.51 && tcp.flags.reset == 1) ||
+  (ip.src == 192.168.1.26 && tcp.flags.reset == 1)
+)
 
 (ip.addr == 192.168.1.5 && ip.addr == 192.168.1.100 && udp) || (ip.src == 192.168.1.5 && ip.dst == 192.168.1.100 && icmp.type == 3 && icmp.code == 3)
