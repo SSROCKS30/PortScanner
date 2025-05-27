@@ -1,16 +1,5 @@
 # Network Port Scanner and Visualization Tool
 
-## Table of Contents
-- [Description](#description)
-- [Features](#features)
-- [Technologies Used](#technologies-used)
-- [Prerequisites](#prerequisites)
-- [Setup and Installation](#setup-and-installation)
-- [How to Run](#how-to-run)
-- [Using the Application](#using-the-application)
-- [Important Nmap Details](#important-nmap-details)
-- [Project Structure](#project-structure)
-
 ## Description
 A Python-based network scanner with a Tkinter GUI. It discovers hosts, performs SYN and UDP port scans, optionally detects OS, and visualizes network topology. Scan results can be saved.
 
